@@ -7,9 +7,10 @@ const SETTERS = [
   'Hemaanth',
   'Harneesh',
   'Krishna',
-  'Kumaran',
+  'Raju',
   'Sethu',
-  'Prasanna'
+  'Prasanna',
+  'Abi Mahesh'
 ];
 
 const SetterPerformance = ({ appointments = [] }) => {

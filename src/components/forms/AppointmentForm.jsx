@@ -8,10 +8,11 @@ const SETTERS = [
   'Hemaanth',
   'Harneesh',
   'Krishna',
-  'Kumaran',
+  'Raju',
   'Sethu',
   'Prasanna',
-  'Sales Person'
+  'Sales Person',
+  'Abi Mahesh'
 ];
 
 const PITCH_TYPES = [
