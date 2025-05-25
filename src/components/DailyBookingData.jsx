@@ -41,7 +41,10 @@ const processBookingData = (appointments, startDate, endDate) => {
   appointments
     .filter(app => {
       const bookingDate = new Date(app.bookingDate + 'T00:00:00');
-      return bookingDate >= start && bookingDate <= end;
+      // Only count original bookings (not rescheduled ones)
+      return bookingDate >= start && 
+             bookingDate <= end && 
+             !app.rescheduledFrom;
     })
     .forEach(app => {
       const date = formatDateToYYYYMMDD(new Date(app.bookingDate));

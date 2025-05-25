@@ -18,6 +18,7 @@ const RescheduleForm = ({ appointment, onClose, onReschedule, salesPeople }) => 
       status: 'booked',
       id: Date.now(),
       date: new Date(selectedDate),
+      bookingDate: selectedDate, // Use the new date as booking date
       rescheduledFrom: {
         date: appointment.date,
         time: appointment.time,
