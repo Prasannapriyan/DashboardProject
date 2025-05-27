@@ -51,26 +51,70 @@ const processBookingData = (appointments, startDate, endDate) => {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  // Add actual booking data
   appointments
     .filter(app => {
       const bookingDate = new Date(app.bookingDate + 'T00:00:00');
-      // Only count original bookings (not rescheduled ones)
+      // Only filter by date range and whether this is an original booking
       return bookingDate >= start && 
              bookingDate <= end && 
-             !app.rescheduledFrom;
+             !app.rescheduledFrom; // Don't count rescheduled versions (but do count originals)
     })
     .forEach(app => {
       const date = formatDateToYYYYMMDD(new Date(app.bookingDate));
       if (allDates[date]) {
+        // Count all metrics based on original booking date
+        console.log('Processing booking:', {
+          date,
+          setterName: app.setterName,
+          status: app.status,
+          pitchType: app.initialPitchType,
+          leadQuality: app.leadQuality
+        });
+
         allDates[date].totalBooked++;
         allDates[date][app.initialPitchType === '5k_pitched' ? 'tenK' : 'twentyK']++;
         allDates[date][app.leadQuality]++;
         if (app.setterName && app.setterName !== 'Sales Person') {
           allDates[date].setterCounts[app.setterName]++;
+          // More debug logging
+          if (app.setterName === 'Krishna') {
+            console.log('Incremented count for Krishna:', {
+              date: date,
+              newCount: allDates[date].setterCounts[app.setterName]
+            });
+          }
         }
       }
     });
+
+  // Final debug log
+  const krishnaAppointments = appointments.filter(app => 
+    app.setterName === 'Krishna' && 
+    formatDateToYYYYMMDD(new Date(app.bookingDate)) === formatDateToYYYYMMDD(startDate)
+  );
+
+  console.log('All appointments for Krishna:', krishnaAppointments.map(app => ({
+    id: app.id,
+    time: app.time,
+    status: app.status,
+    bookingDate: app.bookingDate,
+    appointmentDate: app.date?.toDateString(),
+    rescheduledFrom: app.rescheduledFrom,
+    dateFilter: `${formatDateToYYYYMMDD(new Date(app.bookingDate))} === ${formatDateToYYYYMMDD(startDate)}`
+  })));
+
+  console.log('Filter results:', {
+    totalAppointments: appointments.length,
+    krishnaTotal: krishnaAppointments.length,
+    startDate: formatDateToYYYYMMDD(startDate),
+    endDate: formatDateToYYYYMMDD(endDate)
+  });
+  
+  Object.entries(allDates).forEach(([date, data]) => {
+    if (data.setterCounts['Krishna'] > 0) {
+      console.log(`Date ${date}: Krishna has ${data.setterCounts['Krishna']} bookings`);
+    }
+  });
 
   return allDates;
 };

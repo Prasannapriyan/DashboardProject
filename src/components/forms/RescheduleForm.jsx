@@ -22,7 +22,8 @@ const RescheduleForm = ({ appointment, onClose, onReschedule, salesPeople }) => 
       rescheduledFrom: {
         date: appointment.date,
         time: appointment.time,
-        salesPerson: appointment.salesPerson
+        salesPerson: appointment.salesPerson,
+        originalId: appointment.id
       }
     };
     onReschedule(newAppointment);
