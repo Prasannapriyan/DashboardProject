@@ -26,11 +26,22 @@ const formatDateToYYYYMMDD = (date) => {
 
 const processBookingData = (appointments, startDate, endDate) => {
   // Set dates to local midnight
-  const start = new Date(startDate);
+  const start = startDate ? new Date(startDate) : new Date();
   start.setHours(0, 0, 0, 0);
   
-  const end = new Date(endDate);
+  const end = endDate ? new Date(endDate) : new Date(start);
   end.setHours(23, 59, 59, 999);
+
+  console.log('Processing date range:', {
+    rawStart: startDate,
+    rawEnd: endDate,
+    normalizedStart: start.toISOString(),
+    normalizedEnd: end.toISOString(),
+    dateStrings: {
+      start: formatDateToYYYYMMDD(start),
+      end: formatDateToYYYYMMDD(end)
+    }
+  });
 
   // Initialize an object to store data for all dates in the range
   const allDates = {};
@@ -51,13 +62,96 @@ const processBookingData = (appointments, startDate, endDate) => {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
+  // Debug all Krishna appointments first
+  const krishnaDebug = appointments
+    .filter(app => app.setterName === 'Krishna')
+    .map(app => {
+      const bookingDate = new Date(app.bookingDate + 'T00:00:00');
+      return {
+        id: app.id,
+        bookingDate: app.bookingDate,
+        status: app.status,
+        hasRescheduledFrom: !!app.rescheduledFrom,
+        isInDateRange: bookingDate >= start && bookingDate <= end,
+        willBeIncluded: bookingDate >= start && 
+                       bookingDate <= end && 
+                       !app.rescheduledFrom,
+        dateStr: formatDateToYYYYMMDD(new Date(app.bookingDate))
+      };
+    });
+  
+  console.log('Krishna Appointments Analysis:');
+  console.dir({
+    totalKrishnaAppointments: krishnaDebug.length,
+    appointments: krishnaDebug,
+    dateRange: {
+      start: formatDateToYYYYMMDD(start),
+      end: formatDateToYYYYMMDD(end)
+    },
+    willBeIncluded: krishnaDebug.filter(a => a.willBeIncluded).length
+  }, { depth: null });
+
+  console.log('Date range for filtering:', {
+    startDate: start.toISOString(),
+    endDate: end.toISOString()
+  });
+
+  // Debug selected date range first
+  console.log('Selected date range:', {
+    start: formatDateToYYYYMMDD(start),
+    end: formatDateToYYYYMMDD(end)
+  });
+
+  // Debug Krishna's appointments
+  const krishnaBookingsOnDate = appointments
+    .filter(app => app.setterName === 'Krishna')
+    .map(app => {
+      const bookingDateStr = formatDateToYYYYMMDD(new Date(app.bookingDate));
+      const startDateStr = formatDateToYYYYMMDD(start);
+      return {
+        id: app.id,
+        bookingDate: app.bookingDate,
+        status: app.status,
+        rescheduled: {
+          isRescheduledFrom: !!app.rescheduledFrom,
+          hasRescheduledTo: !!app.rescheduledTo
+        },
+        originalBooking: !app.rescheduledFrom,
+        dates: {
+          booking: bookingDateStr,
+          selected: startDateStr,
+          matches: bookingDateStr === startDateStr
+        }
+      };
+    });
+
+  console.log('Krishna bookings detail:', krishnaBookingsOnDate);
+
+  // First, identify unique appointments per date
+  const uniqueBookings = new Map(); // date -> Set(appointment IDs)
+  appointments.forEach(app => {
+    const bookingDate = new Date(app.bookingDate + 'T00:00:00');
+    const dateStr = formatDateToYYYYMMDD(bookingDate);
+    
+    if (!uniqueBookings.has(dateStr)) {
+      uniqueBookings.set(dateStr, new Set());
+    }
+    
+    // Only add if it's an original booking (not rescheduled)
+    // or if we haven't seen this original appointment yet
+    if (!app.rescheduledFrom && !uniqueBookings.get(dateStr).has(app.id)) {
+      uniqueBookings.get(dateStr).add(app.id);
+    }
+  });
+
+  // Process only unique appointments per date
   appointments
     .filter(app => {
       const bookingDate = new Date(app.bookingDate + 'T00:00:00');
-      // Only filter by date range and whether this is an original booking
+      const dateStr = formatDateToYYYYMMDD(bookingDate);
       return bookingDate >= start && 
              bookingDate <= end && 
-             !app.rescheduledFrom; // Don't count rescheduled versions (but do count originals)
+             uniqueBookings.get(dateStr)?.has(app.id);
     })
     .forEach(app => {
       const date = formatDateToYYYYMMDD(new Date(app.bookingDate));
@@ -74,6 +168,16 @@ const processBookingData = (appointments, startDate, endDate) => {
         allDates[date].totalBooked++;
         allDates[date][app.initialPitchType === '5k_pitched' ? 'tenK' : 'twentyK']++;
         allDates[date][app.leadQuality]++;
+
+        if (app.setterName === 'Krishna') {
+          console.log('Counting Krishna booking:', {
+            dateKey: date,
+            bookingDate: app.bookingDate,
+            id: app.id,
+            originalDate: app.date?.toDateString(),
+            isOriginalDateInRange: app.date && start <= app.date && app.date <= end
+          });
+        }
         if (app.setterName && app.setterName !== 'Sales Person') {
           allDates[date].setterCounts[app.setterName]++;
           // More debug logging
@@ -87,28 +191,11 @@ const processBookingData = (appointments, startDate, endDate) => {
       }
     });
 
-  // Final debug log
-  const krishnaAppointments = appointments.filter(app => 
-    app.setterName === 'Krishna' && 
-    formatDateToYYYYMMDD(new Date(app.bookingDate)) === formatDateToYYYYMMDD(startDate)
-  );
-
-  console.log('All appointments for Krishna:', krishnaAppointments.map(app => ({
-    id: app.id,
-    time: app.time,
-    status: app.status,
-    bookingDate: app.bookingDate,
-    appointmentDate: app.date?.toDateString(),
-    rescheduledFrom: app.rescheduledFrom,
-    dateFilter: `${formatDateToYYYYMMDD(new Date(app.bookingDate))} === ${formatDateToYYYYMMDD(startDate)}`
+  console.log('Final booking counts:', Object.entries(allDates).map(([date, data]) => ({
+    date,
+    allCounts: data.setterCounts,
+    krishnaCounts: data.setterCounts['Krishna']
   })));
-
-  console.log('Filter results:', {
-    totalAppointments: appointments.length,
-    krishnaTotal: krishnaAppointments.length,
-    startDate: formatDateToYYYYMMDD(startDate),
-    endDate: formatDateToYYYYMMDD(endDate)
-  });
   
   Object.entries(allDates).forEach(([date, data]) => {
     if (data.setterCounts['Krishna'] > 0) {
@@ -120,8 +207,23 @@ const processBookingData = (appointments, startDate, endDate) => {
 };
 
 const DailyBookingData = ({ appointments = [] }) => {
-  const [dateRange, setDateRange] = useState([new Date(), new Date()]);
+  const today = new Date();
+  const [dateRange, setDateRange] = useState([today, today]);
   const [startDate, endDate] = dateRange;
+
+  // Handle date range selection
+  const handleDateChange = (dates) => {
+    const [start, end] = dates;
+    
+    if (!start) {
+      // Reset to today if no start date
+      setDateRange([new Date(), new Date()]);
+      return;
+    }
+
+    // Store the new range
+    setDateRange(dates);
+  };
 
   const bookingData = useMemo(() => {
     const processedData = processBookingData(appointments, startDate, endDate);
@@ -136,11 +238,17 @@ const DailyBookingData = ({ appointments = [] }) => {
         <h2 className="text-lg font-bold">Daily Booking Data</h2>
         <div className="flex items-center gap-2">
           <DatePicker
+            selected={startDate}
+            onChange={handleDateChange}
             selectsRange={true}
             startDate={startDate}
             endDate={endDate}
-            onChange={(update) => setDateRange(update)}
+            shouldCloseOnSelect={false}
+            showMonthDropdown
+            showYearDropdown
+            dropdownMode="select"
             dateFormat="dd/MM/yyyy"
+            placeholderText="Select date range"
             className="border px-3 py-2 rounded text-center"
           />
         </div>
